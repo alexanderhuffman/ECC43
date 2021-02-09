@@ -1,4 +1,4 @@
-module gf_poly_mul(flat_p, flat_q, flat_z, out0, out1, out2);
+module gf_poly_mul(flat_p, flat_q, flat_z);
 
 parameter m = 255;
 parameter SIZE = $clog2(m);
@@ -13,12 +13,12 @@ output [large_array_size-1:0] flat_z;
 
 wire [SIZE-1:0] p[0:n];
 wire [SIZE-1:0] q[0:n];
-wire [SIZE-1:0] z[0:large_array];
 
-wire [SIZE-1:0] initial_mult[0:large_array][0:n];
+wire [SIZE-1:0] initial_mult[0:n][0:n];
 wire [large_array_size-1:0] flat_initial_mult[0:n];
+wire [large_array_size-1:0] flat_final_mult[0:n];
 
-wire [large_array_size-1:0] noHIGHZ[0:n];
+wire [large_array_size-1:0] sum_result[0:n-1];
 
 genvar i;
 genvar j;
@@ -29,7 +29,7 @@ generate
 		assign q[i] = flat_q[((i+1)*SIZE)-1:i*SIZE];
 		// perform initial multiplication
 		for (j = 0; j <= n; j = j + 1) begin
-			gf_mul #(.m(m), .SIZE(SIZE)) my_multiplier(.a(p[i]), .b(q[j]), .y(initial_mult[i+j][i]));
+			gf_mul #(.m(m), .SIZE(SIZE)) my_multiplier(.a(p[i]), .b(q[j]), .y(initial_mult[j][i]));
 		end
 	end
 
@@ -40,25 +40,25 @@ generate
 		end
 	end
 
-	// get rid of HIGHZ values in flat_initial_mult arrays
-	// works, but is probably not synthesizable
-/*
-	for (i = 0; i <= n; i = i + 1) begin
-		for (j = 0; j < large_array_size; j = j + 1) begin
-			assign noHIGHZ[i][j] = (flat_initial_mult[i][j] === 1'bz) ? 1'b0 : flat_initial_mult[i][j];
-		end
+	// getting rid of x (don't care) values
+	for (i = 0; i < n; i = i + 1) begin
+		assign flat_final_mult[i][flat_size+(i*SIZE)-1:0] = flat_initial_mult[i][flat_size-1:0] << i*SIZE;
+		assign flat_final_mult[i][large_array_size-1:flat_size+(i*SIZE)] = 0;
 	end
-*/
+	assign flat_final_mult[n] = flat_initial_mult[n][flat_size-1:0] << n*SIZE;
+
+	// perform first gf_poly_add operation
+	gf_poly_add #(.m(m), .SIZE(SIZE), .n(large_array), .flat_size(large_array_size))
+		first_adder(.flat_p(flat_final_mult[0]), .flat_q(flat_final_mult[1]), .flat_z(sum_result[0]));
+
+	// perform the rest of the gf_poly_add operations
+	for (i = 0; i < n-1; i = i + 1) begin
+		gf_poly_add #(.m(m), .SIZE(SIZE), .n(large_array), .flat_size(large_array_size))
+			my_adder(.flat_p(sum_result[i]), .flat_q(flat_final_mult[i+2]), .flat_z(sum_result[i+1]));
+	end
+
+	assign flat_z = sum_result[n-1];
 
 endgenerate
-
-// for debugging
-output [large_array_size-1:0] out0;
-output [large_array_size-1:0] out1;
-output [large_array_size-1:0] out2;
-
-assign out0 = noHIGHZ[0];
-assign out1 = noHIGHZ[1];
-assign out2 = noHIGHZ[2];
 
 endmodule
