@@ -1,4 +1,5 @@
 // look-up table for gf operations
+// uses primitive 0x11d, see create_LUT.py
 module LUT(index, gf_exp, gf_log);
 
 parameter m = 255;
@@ -6,9 +7,6 @@ parameter SIZE = $clog2(m);
 
 input [SIZE-1:0] index;
 output [SIZE-1:0] gf_exp, gf_log;
-
-// reg [255:0] exp_mem[SIZE-1:0];
-// reg [255:0] log_mem[SIZE-1:0];
 
 wire [SIZE-1:0] exp_mem[0:255];
 wire [SIZE-1:0] log_mem[0:255];
